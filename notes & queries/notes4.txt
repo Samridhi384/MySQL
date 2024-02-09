@@ -1,0 +1,124 @@
+Enter password: *****
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 11
+Server version: 8.0.36 MySQL Community Server - GPL
+
+Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> use instagram
+Database changed
+mysql> insert into follows(follower_id , followee_id) values (4,4);
+Query OK, 1 row affected (0.01 sec)
+
+mysql>
+mysql> delimiter $$
+mysql>  create trigger prevent_self_follow
+    ->     before insert on follows for each row
+    ->       begin
+    ->       if new.follower_id = new.followee_id
+    ->       then
+    ->         signal sqlstate '45000'
+    ->             set message_text = 'you can not follow yourself';
+    ->        end if;
+    ->      end;
+    ->     $$
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> delimiter ;
+mysql>  insert into follows(follower_id , followee_id) values (5,5);
+ERROR 1644 (45000): you can not follow yourself
+mysql>  insert into follows(follower_id , followee_id) values (7.2);
+ERROR 1136 (21S01): Column count doesn't match value count at row 1
+mysql>  insert into follows(follower_id , followee_id) values (7,2);
+Query OK, 1 row affected (0.01 sec)
+
+mysql> CREATE TABLE unfollows (
+    ->     follower_id INTEGER NOT NULL,
+    ->     followee_id INTEGER NOT NULL,
+    ->     created_at TIMESTAMP DEFAULT NOW(),
+    ->     FOREIGN KEY(follower_id) REFERENCES users(id),
+    ->     FOREIGN KEY(followee_id) REFERENCES users(id),
+    ->     PRIMARY KEY(follower_id, followee_id)
+    -> );
+Query OK, 0 rows affected (0.05 sec)
+
+mysql> DELIMITER $$
+mysql>
+mysql> CREATE TRIGGER create_unfollow
+    ->     AFTER DELETE ON follows FOR EACH ROW
+    -> BEGIN
+    ->     INSERT INTO unfollows
+    ->     SET follower_id = OLD.follower_id,
+    ->         followee_id = OLD.followee_id;
+    -> END$$
+Query OK, 0 rows affected (0.01 sec)
+
+mysql>
+mysql> DELIMITER ;
+mysql> select * from follows limit 5;
++-------------+-------------+---------------------+
+| follower_id | followee_id | created_at          |
++-------------+-------------+---------------------+
+|           2 |           1 | 2024-01-25 12:21:01 |
+|           2 |           3 | 2024-01-25 12:21:01 |
+|           2 |           4 | 2024-01-25 12:21:01 |
+|           2 |           5 | 2024-01-25 12:21:01 |
+|           2 |           6 | 2024-01-25 12:21:01 |
++-------------+-------------+---------------------+
+5 rows in set (0.00 sec)
+
+mysql> delete from follows where follower_id = 2 and followee_id = 1;
+Query OK, 1 row affected (0.01 sec)
+
+mysql> select * from follows limit 5;
++-------------+-------------+---------------------+
+| follower_id | followee_id | created_at          |
++-------------+-------------+---------------------+
+|           2 |           3 | 2024-01-25 12:21:01 |
+|           2 |           4 | 2024-01-25 12:21:01 |
+|           2 |           5 | 2024-01-25 12:21:01 |
+|           2 |           6 | 2024-01-25 12:21:01 |
+|           2 |           7 | 2024-01-25 12:21:01 |
++-------------+-------------+---------------------+
+5 rows in set (0.00 sec)
+
+mysql> select * from unfollows limit 5;
++-------------+-------------+---------------------+
+| follower_id | followee_id | created_at          |
++-------------+-------------+---------------------+
+|           2 |           1 | 2024-01-29 10:03:50 |
++-------------+-------------+---------------------+
+1 row in set (0.00 sec)
+
+mysql> show triggers;
++---------------------+--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------+-----------------------------------------------------------------------------------------------------------------------+----------------+----------------------+----------------------+--------------------+
+| Trigger             | Event  | Table   | Statement                                                                                                                                                                         | Timing | Created                | sql_mode                                                                                                              | Definer        | character_set_client | collation_connection | Database Collation |
++---------------------+--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------+-----------------------------------------------------------------------------------------------------------------------+----------------+----------------------+----------------------+--------------------+
+| prevent_self_follow | INSERT | follows | begin
+      if new.follower_id = new.followee_id
+      then
+        signal sqlstate '45000'
+            set message_text = 'you can not follow yourself';
+       end if;
+     end | BEFORE | 2024-01-29 09:54:01.74 | ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION | root@localhost | cp850                | cp850_general_ci     | utf8mb4_0900_ai_ci |
+| create_unfollow     | DELETE | follows | BEGIN
+    INSERT INTO unfollows
+    SET follower_id = OLD.follower_id,
+        followee_id = OLD.followee_id;
+END                                                                 | AFTER  | 2024-01-29 10:03:02.30 | ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION | root@localhost | cp850                | cp850_general_ci     | utf8mb4_0900_ai_ci |
++---------------------+--------+---------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------+------------------------+-----------------------------------------------------------------------------------------------------------------------+----------------+----------------------+----------------------+--------------------+
+2 rows in set (0.01 sec)
+
+mysql> drop trigger ^C
+mysql> show triggers  prevent_self_follow;
+ERROR 1064 (42000): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'prevent_self_follow' at line 1
+mysql> drop trigger  prevent_self_follow;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql>
